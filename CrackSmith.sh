@@ -25,110 +25,91 @@ banner() {
     echo -e "\e[1;91m[~] CrackSmith v1.1 | Powered by HackOps Academy | @_hack_ops_\e[0m\n"
 }
 
-# Generator Functions
-generate_numeric() {
-    len=$1
-    max=$((10 ** len - 1))
-    for i in $(seq -w 0 $max); do
+
+# === Configuration ===
+outfile="wordlist.txt"
+wordfile="words.txt"  # Add your base words here
+
+# === Common patterns function ===
+generate_common_patterns() {
+    > "$outfile"
+    while read -r word; do
+        echo "$word" >> "$outfile"
+        echo "${word}123" >> "$outfile"
+        echo "${word}1234" >> "$outfile"
+        echo "${word}@123" >> "$outfile"
+        echo "${word}@2025" >> "$outfile"
+        echo "${word}2025" >> "$outfile"
+        echo "${word}#2025" >> "$outfile"
+        echo "${word}!" >> "$outfile"
+        echo "123${word}" >> "$outfile"
+        echo "admin${word}" >> "$outfile"
+        echo "${word}admin" >> "$outfile"
+        echo "${word}root" >> "$outfile"
+        echo "${word}pass" >> "$outfile"
+        echo "${word}!" >> "$outfile"
+        echo "${word}@" >> "$outfile"
+        echo "${word}@#" >> "$outfile"
+        echo "${word}$$" >> "$outfile"
+    done < "$wordfile"
+    echo "[+] Common password patterns generated in $outfile"
+}
+
+# === Number Password Generators ===
+generate_4digit() {
+    > "$outfile"
+    for i in {0000..9999}; do
+        printf "%04d\n" "$i" >> "$outfile"
+    done
+    echo "[+] 4-digit passwords generated in $outfile"
+}
+
+generate_8digit() {
+    > "$outfile"
+    for ((i=10000000; i<=10010000; i++)); do
         echo "$i" >> "$outfile"
     done
+    echo "[+] 8-digit passwords (sample) generated in $outfile"
 }
 
-generate_word_combos() {
-    wordlist=$1
-    count=$2
-    delimiter=$3
-
-    words=($(cat "$wordlist"))
-
-    if [[ $count -eq 2 ]]; then
-        for w1 in "${words[@]}"; do
-            for w2 in "${words[@]}"; do
-                echo "${w1}${delimiter}${w2}" >> "$outfile"
-            done
+# === Word-based Passwords ===
+generate_word_passwords() {
+    count=$1
+    > "$outfile"
+    words=($(shuf -n $((count * 10)) "$wordfile"))
+    for ((i=0; i<${#words[@]} - count; i++)); do
+        pass=""
+        for ((j=0; j<count; j++)); do
+            pass+="${words[i+j]}"
         done
-    elif [[ $count -eq 3 ]]; then
-        for w1 in "${words[@]}"; do
-            for w2 in "${words[@]}"; do
-                for w3 in "${words[@]}"; do
-                    echo "${w1}${delimiter}${w2}${delimiter}${w3}" >> "$outfile"
-                done
-            done
-        done
-    else
-        echo "[!] Only 2 or 3 word combos supported."
-        exit 1
-    fi
-}
-
-generate_passphrase() {
-    wordlist=$1
-    count=$2
-
-    for i in {1..1000}; do
-        line=""
-        for j in $(seq 1 $count); do
-            word=$(shuf -n1 "$wordlist")
-            line+="$word "
-        done
-        echo "$line" >> "$outfile"
+        echo "$pass" >> "$outfile"
     done
+    echo "[+] ${count}-word passwords generated in $outfile"
 }
 
-# Menu UI
-menu() {
-    banner
-    echo -e "\e[1;93mChoose an option:\e[0m"
-    echo "1) Generate Numeric Passwords"
-    echo "2) Generate Word Combinations (2 or 3 words)"
-    echo "3) Generate Passphrase (8 or 12 words)"
-    echo "4) Exit"
-    echo -n $'\nEnter your choice: '
-    read choice
+# === Menu ===
+while true; do
+    clear
+    echo "=============================="
+    echo "  🔐 Password Wordlist Maker"
+    echo "=============================="
+    echo "1. Generate 4-digit numeric passwords"
+    echo "2. Generate 8-digit numeric passwords"
+    echo "3. Generate 8-word passwords (combined)"
+    echo "4. Generate 12-word passwords (combined)"
+    echo "5. Generate common password patterns"
+    echo "0. Exit"
+    echo "------------------------------"
+    read -p "Choose an option: " choice
 
     case $choice in
-        1)
-            echo -n "Enter number of digits (e.g., 4, 6, 8): "
-            read digits
-            echo "[~] Generating $digits-digit passwords..."
-            generate_numeric "$digits"
-            ;;
-        2)
-            echo -n "Enter path to wordlist (e.g., words.txt): "
-            read wordlist
-            if [[ ! -f "$wordlist" ]]; then echo "[!] File not found"; exit 1; fi
-            echo -n "Enter word count (2 or 3): "
-            read count
-            echo -n "Enter delimiter (or leave blank): "
-            read delimiter
-            echo "[~] Generating $count-word combinations..."
-            generate_word_combos "$wordlist" "$count" "$delimiter"
-            ;;
-        3)
-            echo -n "Enter path to wordlist (e.g., diceware.txt): "
-            read wordlist
-            if [[ ! -f "$wordlist" ]]; then echo "[!] File not found"; exit 1; fi
-            echo -n "Enter word count (8 or 12): "
-            read count
-            echo "[~] Generating $count-word passphrases..."
-            generate_passphrase "$wordlist" "$count"
-            ;;
-        4)
-            echo "[!] Exiting CrackSmith..."
-            exit 0
-            ;;
-        *)
-            echo "[!] Invalid choice."
-            ;;
+        1) generate_4digit ;;
+        2) generate_8digit ;;
+        3) generate_word_passwords 8 ;;
+        4) generate_word_passwords 12 ;;
+        5) generate_common_patterns ;;
+        0) echo "Exiting..."; exit ;;
+        *) echo "Invalid option. Try again." ;;
     esac
-
-    echo -e "\n[✔] Output saved to: $outfile"
-}
-
-# Run Menu Loop
-while true; do
-    menu
-    echo -n $'\n[↻] Run again? (y/n): '
-    read again
-    [[ "$again" =~ ^[Yy]$ ]] || break
+    read -p "Press Enter to return to menu..."
 done
