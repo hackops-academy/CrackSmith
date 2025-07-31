@@ -18,30 +18,48 @@ banner() {
     echo " ::: :::  ::   :::  ::   :::   ::: :::   ::  :::  :::: ::   :::     ::    ::     ::    ::   :::"
     echo " :: :: :   :   : :   :   : :   :: :: :   :   :::  :: : :     :      :    :       :      :   : :"
     echo -e "\e[0m"
-    echo -e "\e[1;91m[~] CrackSmith v1.0 | Powered by HackOps Academy | @_hack_ops_\e[0m"
+    echo -e "\e[1;91m[~] CrackSmith v1.1 | Powered by HackOps Academy | @_hack_ops_\e[0m"
     echo
 }
 
-# Generate password list
+# Generate wordlist
 generate_passwords() {
-    echo -e "\n[+] Enter target info to craft the wordlist:"
+    echo -e "\n[+] Enter info (leave blank if unknown):"
+
     read -p "[?] First Name: " fname
     read -p "[?] Last Name: " lname
     read -p "[?] Nickname: " nick
-    read -p "[?] Birthdate (ddmmyyyy): " bday
+
+    echo -e "\n[!] Use DDMMYYYY format (e.g. 15082005) or leave blank if unknown"
+    read -p "[?] Birthdate: " bday
+
     read -p "[?] Pet Name: " pet
     read -p "[?] Favorite Number: " favnum
-    read -p "[?] Symbols to append (e.g. ! @ #): " sym
+    read -p "[?] Symbols (space-separated, e.g. ! @ #): " sym
 
     mkdir -p output
-    outfile="output/${fname}_cracksmith.txt"
+    outfile="output/CrackSmith_${fname:-User}.txt"
     > "$outfile"
 
-    base=("$fname" "$lname" "$nick" "$bday" "$pet" "$favnum")
-    symbols=($(echo $sym))
+    base=()
+    [[ $fname ]] && base+=("$fname")
+    [[ $lname ]] && base+=("$lname")
+    [[ $nick ]]  && base+=("$nick")
+    [[ $bday ]]  && base+=("$bday")
+    [[ $pet ]]   && base+=("$pet")
+    [[ $favnum ]] && base+=("$favnum")
 
-    echo -e "\n[+] Generating variations..."
+    symbols=($sym)
+    estimate_lines=$(( ${#base[@]} * (${#symbols[@]} * 2 + 4) ))
 
+    echo -e "\n🧠 Estimated wordlist size:"
+    echo -e "   ~ $estimate_lines entries"
+    echo -e "   ~ $(($estimate_lines * 10 / 1024)) KB (approx)"
+
+    read -p "[?] Continue generating? (y/n): " confirm
+    [[ $confirm != "y" ]] && echo -e "\n[!] Aborted. Exiting...\n" && exit 0
+
+    echo -e "\n[+] Generating passwords..."
     for word in "${base[@]}"; do
         for sym in "${symbols[@]}"; do
             echo "${word}${sym}" >> "$outfile"
@@ -56,11 +74,10 @@ generate_passwords() {
         echo "${word^}" >> "$outfile"
     done
 
-    echo -e "\n✅ Wordlist saved as: \e[1;93m$outfile\e[0m"
-    echo -e "[*] Total lines: $(wc -l < $outfile)"
-    echo -e "[*] Move to Termux Downloads with:\n    \e[1;92mmv $outfile /sdcard/Download/\e[0m"
+    echo -e "\n✅ Wordlist saved to: \e[1;93m$outfile\e[0m"
+    echo -e "📦 Move to Termux Downloads:\n    \e[1;92mmv $outfile /sdcard/Download/\e[0m"
 }
 
-# Start
+# Start tool
 banner
 generate_passwords
