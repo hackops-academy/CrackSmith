@@ -52,10 +52,7 @@ generate_passwords() {
     symbols=($sym)
     estimate_lines=$(( ${#base[@]} * (${#symbols[@]} * 2 + 4) ))
 
-    echo -e "\n🧠 Estimated wordlist size:"
-    echo -e "   ~ $estimate_lines entries"
-    echo -e "   ~ $(($estimate_lines * 10 / 1024)) KB (approx)"
-
+    
     read -p "[?] Continue generating? (y/n): " confirm
     [[ $confirm != "y" ]] && echo -e "\n[!] Aborted. Exiting...\n" && exit 0
 
