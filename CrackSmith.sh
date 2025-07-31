@@ -76,6 +76,17 @@ generate_passwords() {
 
     echo -e "\n✅ Wordlist saved to: \e[1;93m$outfile\e[0m"
     echo -e "📦 Move to Termux Downloads:\n    \e[1;92mmv $outfile /sdcard/Download/\e[0m"
+
+
+
+    # Accurate line count and file size
+    line_count=$(wc -l < "$outfile")
+    file_size=$(du -h "$outfile" | cut -f1)
+
+    echo -e "📏 Total Lines: \e[1;92m$line_count\e[0m"
+    echo -e "💾 File Size: \e[1;92m$file_size\e[0m"
+    echo -e "📦 To move to Downloads folder:"
+    echo -e "    \e[1;92mmv $outfile /sdcard/Download/\e[0m"
 }
 
 # Start tool
