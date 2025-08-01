@@ -20,6 +20,7 @@ banner() {
     echo -e "\e[0m"
     echo -e "\e[1;91m[~] CrackSmith v2.0 | Powered by HackOps Academy | @hack_ops\e[0m"
 }
+banner 
 
 # Output file
 read -p "Enter output filename (e.g., wordlist.txt): " outfile
@@ -98,8 +99,6 @@ generate_common_patterns() {
     echo "[+] Common patterns saved to $outfile"
 }
 
-# Call the banner
-banner
 
 # Menu
 while true; do
