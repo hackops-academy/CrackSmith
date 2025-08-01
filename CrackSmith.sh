@@ -3,11 +3,23 @@ clear
 
 trap 'echo -e "\n[!] Interrupted. Exiting CrackSmith..."; exit 1' 2
 
-
-
-banner() { clear echo -e "\e[1;92m" echo " @@@@@@@  @@@@@@@    @@@@@@    @@@@@@@  @@@  @@@   @@@@@@   @@@@@@@@@@   @@@  @@@@@@@  @@@  @@@" echo "@@@@@@@@  @@@@@@@@  @@@@@@@@  @@@@@@@@  @@@  @@@  @@@@@@@   @@@@@@@@@@@  @@@  @@@@@@@  @@@  @@@" echo "!@@       @@!  @@@  @@!  @@@  !@@       @@!  !@@  !@@       @@! @@! @@!  @@!    @@!    @@!  @@@" echo "!@!       !@!  @!@  !@!  @!@  !@!       !@!  @!!  !@!       !@! !@! !@!  !@!    !@!    !@!  @!@" echo "!@!       @!@!!@!   @!@!@!@!  !@!       @!@@!@!   !!@@!!    @!! !!@ @!@  !!@    @!!    @!@!@!@!" echo "!!!       !!@!@!    !!!@!!!!  !!!       !!@!!!     !!@!!!   !@!   ! !@!  !!!    !!!    !!!@!!!!" echo ":!!       !!: :!!   !!:  !!!  :!!       !!: :!!        !:!  !!:     !!:  !!:    !!:    !!:  !!!" echo ":!:       :!:  !:!  :!:  !:!  :!:       :!:  !:!      !:!   :!:     :!:  :!:    :!:    :!:  !:!" echo " ::: :::  ::   :::  ::   :::   ::: :::   ::  :::  :::: ::   :::     ::    ::     ::    ::   :::" echo " :: :: :   :   : :   :   : :   :: :: :   :   :::  :: : :     :      :    :       :      :   : :" echo -e "\e[0m" echo -e "\e[1;91m[~] CrackSmith v2.0 | Powered by HackOps Academy | @hack_ops\e[0m" echo }
-
-
+# Banner Function
+banner() {
+    clear
+    echo -e "\e[1;92m"
+    echo " @@@@@@@  @@@@@@@    @@@@@@    @@@@@@@  @@@  @@@   @@@@@@   @@@@@@@@@@   @@@  @@@@@@@  @@@  @@@"
+    echo "@@@@@@@@  @@@@@@@@  @@@@@@@@  @@@@@@@@  @@@  @@@  @@@@@@@   @@@@@@@@@@@  @@@  @@@@@@@  @@@  @@@"
+    echo "!@@       @@!  @@@  @@!  @@@  !@@       @@!  !@@  !@@       @@! @@! @@!  @@!    @@!    @@!  @@@"
+    echo "!@!       !@!  @!@  !@!  @!@  !@!       !@!  @!!  !@!       !@! !@! !@!  !@!    !@!    !@!  @!@"
+    echo "!@!       @!@!!@!   @!@!@!@!  !@!       @!@@!@!   !!@@!!    @!! !!@ @!@  !!@    @!!    @!@!@!@!"
+    echo "!!!       !!@!@!    !!!@!!!!  !!!       !!@!!!     !!@!!!   !@!   ! !@!  !!!    !!!    !!!@!!!!"
+    echo ":!!       !!: :!!   !!:  !!!  :!!       !!: :!!        !:!  !!:     !!:  !!:    !!:    !!:  !!!"
+    echo ":!:       :!:  !:!  :!:  !:!  :!:       :!:  !:!      !:!   :!:     :!:  :!:    :!:    :!:  !:!"
+    echo " ::: :::  ::   :::  ::   :::   ::: :::   ::  :::  :::: ::   :::     ::    ::     ::    ::   :::"
+    echo " :: :: :   :   : :   :   : :   :: :: :   :   :::  :: : :     :      :    :       :      :   : :"
+    echo -e "\e[0m"
+    echo -e "\e[1;91m[~] CrackSmith v2.0 | Powered by HackOps Academy | @hack_ops\e[0m"
+}
 
 # Output file
 read -p "Enter output filename (e.g., wordlist.txt): " outfile
@@ -38,7 +50,7 @@ generate_8word() {
         return
     fi
     for i in {1..100}; do
-        cat words.txt | shuf -n 8 | tr '\n' ' ' | sed 's/ $//' >> "$outfile"
+        shuf -n 8 words.txt | tr '\n' ' ' | sed 's/ $//' >> "$outfile"
         echo "" >> "$outfile"
     done
     echo "[+] 8-word passphrases saved to $outfile"
@@ -52,7 +64,7 @@ generate_12word() {
         return
     fi
     for i in {1..100}; do
-        cat words.txt | shuf -n 12 | tr '\n' ' ' | sed 's/ $//' >> "$outfile"
+        shuf -n 12 words.txt | tr '\n' ' ' | sed 's/ $//' >> "$outfile"
         echo "" >> "$outfile"
     done
     echo "[+] 12-word passphrases saved to $outfile"
@@ -86,6 +98,9 @@ generate_common_patterns() {
     echo "[+] Common patterns saved to $outfile"
 }
 
+# Call the banner
+banner
+
 # Menu
 while true; do
     echo
@@ -108,4 +123,3 @@ while true; do
         *) echo "Invalid option. Try again." ;;
     esac
 done
-}
