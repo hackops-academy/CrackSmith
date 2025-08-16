@@ -2,6 +2,13 @@
 
 CrackSmith is a powerful and flexible wordlist generator designed for password cracking, red teaming, and CTF practice. With multiple modes and real-world password patterns, it's your go-to tool for crafting custom password dictionaries.
 
+![banner](https://img.shields.io/badge/Made%20By-HackOps%20Academy-%23purple)  
+![Shell](https://img.shields.io/badge/Made%20with-Bash-blue)
+![Status](https://img.shields.io/badge/Status-Active-success)
+![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen)
+
+
+
 ---
 
 ## 🚀 Features
