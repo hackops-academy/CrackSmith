@@ -36,6 +36,11 @@ chmod +x CrackSmith.sh
 ./CrackSmith.sh
 ```
 
+### Using the tool
+```bash
+./CrackSmith.sh
+```
+
 ## 📄 Menu Option 
 
 CrackSmith - Advanced Wordlist Generator
@@ -56,6 +61,10 @@ This tool is intended for educational and ethical hacking purposes only. Do not 
 
  ## 🤖 Author
 
-HackOps Academy
+HackOps Academy            
+
+
+
+
 Built by: Cyber Ghost (Lekhraj Singh Chouhan)
 Focused on Ethical Hacking | Red Teaming | Cybersecurity Education
