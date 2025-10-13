@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# CrackSmith CUpp-like friendly tool
+# CrackSmith — CUpp-like friendly wordlist generator
 # Author: Hinata (refined for Lucky)
-# Version: 1.0
-# Works on: Kali / Ubuntu / Termux
+# Version: 1.1
+# Works on: Kali / Ubuntu / Termux (requires bash >=4 for some expansions)
 # License: MIT
 #
 # Usage: ./cracksmith_cupp.sh
@@ -12,7 +12,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# Colors
+# Colors (if terminal supports)
 RED="\e[1;31m"; GRN="\e[1;32m"; YEL="\e[1;33m"; BLU="\e[1;34m"; RST="\e[0m"
 
 # Globals
@@ -22,6 +22,15 @@ WORKDIR="$(pwd)"
 MAX_WARN=5000000   # warn above this many entries
 PV="$(command -v pv || true)"
 GZIP="$(command -v gzip || true)"
+SCRIPT_NAME="$(basename "$0")"
+
+cleanup() {
+    # remove tmp file if exists
+    if [[ -n "${TMPFILE:-}" && -f "$TMPFILE" ]]; then
+        rm -f "$TMPFILE"
+    fi
+}
+trap cleanup EXIT INT TERM
 
 ethics() {
     cat <<EOF
@@ -40,42 +49,76 @@ EOF
 
 banner() {
     clear
-    echo -e "${GRN}CrackSmith — CUpp-style friendly wordlist generator v1.0${RST}"
+    printf "${GRN}CrackSmith — CUpp-style friendly wordlist generator v1.1${RST}\n"
     echo "Simple • Safe • Powerful"
     ethics
 }
 
 ensure_tmp() {
-    TMPFILE="$(mktemp "${WORKDIR}/cracksmith.XXXXXX")" || { echo "mktemp failed"; exit 1; }
-    # header
-    {
-        echo "# CrackSmith CUpp-style wordlist"
-        echo "# Generated: $(date --iso-8601=seconds 2>/dev/null || date)"
-    } > "$TMPFILE"
+    if [[ -n "${TMPFILE:-}" && -f "$TMPFILE" ]]; then
+        : # already created
+    else
+        TMPFILE="$(mktemp "${WORKDIR}/cracksmith.XXXXXX")" || { echo "mktemp failed"; exit 1; }
+        {
+            echo "# CrackSmith CUpp-style wordlist"
+            if date --iso-8601=seconds >/dev/null 2>&1; then
+                echo "# Generated: $(date --iso-8601=seconds)"
+            else
+                echo "# Generated: $(date)"
+            fi
+        } > "$TMPFILE"
+    fi
 }
 
+# finalize writes TMPFILE -> OUTFILE (sorted unique), optional gzip
 finalize() {
-    sort -u "$TMPFILE" -o "$TMPFILE.sorted"
-    mv -f "$TMPFILE.sorted" "$OUTFILE"
-    rm -f "$TMPFILE" || true
+    if [[ -z "${OUTFILE:-}" ]]; then
+        read -r -p "No output filename given. Enter output filename: " OUTFILE
+        if [[ -z "$OUTFILE" ]]; then
+            echo -e "${RED}[!] No output file specified. Aborting.${RST}"
+            return 1
+        fi
+    fi
+    if [[ ! -f "$TMPFILE" ]]; then
+        echo -e "${RED}[!] No temporary data to finalize.${RST}"
+        return 1
+    fi
+
+    # sort & uniq safely (use temp file)
+    local sorted_tmp
+    sorted_tmp="$(mktemp "${WORKDIR}/cracksmith.sorted.XXXXXX")"
+    sort -u "$TMPFILE" -o "$sorted_tmp"
+    mv -f "$sorted_tmp" "$OUTFILE"
     echo -e "${GRN}[✔] Final wordlist saved to: $OUTFILE${RST}"
+
+    # offer compression if gzip available
     if [[ -n "$GZIP" ]]; then
         read -r -p "Compress output with gzip? (y/N): " c
+        c="${c:-N}"
         if [[ "${c,,}" == "y" ]]; then
             "$GZIP" -f "$OUTFILE"
             OUTFILE="${OUTFILE}.gz"
             echo -e "${GRN}[✔] Compressed -> $OUTFILE${RST}"
         fi
     fi
+
+    # clean temp file (trap will also cleanup on exit)
+    rm -f "$TMPFILE" || true
+    TMPFILE=""
 }
 
 check_disk_for_estimate() {
     # estimate bytes = entries * avg_len (approx 16)
     local entries="$1"
+    if ! [[ "$entries" =~ ^[0-9]+$ ]]; then
+        return 0
+    fi
     local needed=$(( entries * 16 ))
     local avail_kb
-    avail_kb=$(df -P . --output=avail | tail -n1 2>/dev/null || echo 0)
-    avail_bytes=$(( avail_kb * 1024 ))
+    avail_kb=$(df -P . --output=avail 2>/dev/null | tail -n1 || echo 0)
+    # ensure numeric
+    avail_kb="${avail_kb//[^0-9]/}"
+    local avail_bytes=$(( avail_kb * 1024 ))
     if (( avail_bytes < needed )); then
         echo -e "${RED}[!] Not enough disk space (need approx $(printf '%d' "$needed") bytes). Aborting.${RST}"
         return 1
@@ -84,7 +127,6 @@ check_disk_for_estimate() {
 }
 
 progress_echo() {
-    # simple progress counter (call manually if needed)
     local n="$1"
     printf "\r[+] Generated %d entries..." "$n" >&2
 }
@@ -92,15 +134,21 @@ progress_echo() {
 # --- Generators ----------------------------------------------------------
 
 gen_profile_variants() {
-    # Input tokens -> generate lots of human-like variants
     local -a toks=("$@")
     local n=0
+    local t l
     for t in "${toks[@]}"; do
         [[ -z "$t" ]] && continue
-        # basic variants
+        # safe normalize (preserve original then variants)
         echo "$t" >> "$TMPFILE"; ((n++))
-        echo "${t,,}" >> "$TMPFILE"; ((n++))
-        echo "${t^^}" >> "$TMPFILE"; ((n++))
+        # lower / upper / capitalized
+        if command -v awk >/dev/null 2>&1; then
+            echo "$t" | awk '{print tolower($0)}' >> "$TMPFILE"; ((n++))
+            echo "$t" | awk '{print toupper($0)}' >> "$TMPFILE"; ((n++))
+        else
+            echo "${t,,}" >> "$TMPFILE"; ((n++))
+            echo "${t^^}" >> "$TMPFILE"; ((n++))
+        fi
         echo "${t^}" >> "$TMPFILE"; ((n++))
         echo "${t}123" >> "$TMPFILE"; ((n++))
         echo "${t}1234" >> "$TMPFILE"; ((n++))
@@ -108,13 +156,15 @@ gen_profile_variants() {
         echo "${t}!@#" >> "$TMPFILE"; ((n++))
         echo "${t}007" >> "$TMPFILE"; ((n++))
         echo "${t}_01" >> "$TMPFILE"; ((n++))
-        # leet sample
+        # leet
         l="${t//o/0}"; l="${l//a/4}"; l="${l//e/3}"; l="${l//i/1}"; l="${l//s/5}"
         echo "$l" >> "$TMPFILE"; ((n++))
         echo "${l}123" >> "$TMPFILE"; ((n++))
     done
+
     # combine tokens pairwise
     local len="${#toks[@]}"
+    local i j a b
     for ((i=0;i<len;i++)); do
         for ((j=0;j<len;j++)); do
             [[ $i -eq $j ]] && continue
@@ -134,14 +184,14 @@ gen_dictionary_transforms() {
         echo -e "${RED}[!] Dictionary file not found: $dict${RST}"; return 1
     fi
     local count=0
-    while IFS= read -r w; do
+    local w l
+    while IFS= read -r w || [[ -n "$w" ]]; do
         [[ -z "$w" ]] && continue
         echo "$w" >> "$TMPFILE"; ((count++))
         echo "${w}123" >> "$TMPFILE"; ((count++))
         echo "${w}2025" >> "$TMPFILE"; ((count++))
         echo "${w^^}" >> "$TMPFILE"; ((count++))
         echo "${w^}" >> "$TMPFILE"; ((count++))
-        # leet
         l="${w//o/0}"; l="${l//a/4}"; l="${l//e/3}"; l="${l//i/1}"; l="${l//s/5}"
         echo "$l" >> "$TMPFILE"; ((count++))
     done < "$dict"
@@ -150,6 +200,10 @@ gen_dictionary_transforms() {
 
 gen_numeric_range() {
     local start="$1"; local end="$2"; local pad="$3"
+    # validate numeric
+    if ! [[ "$start" =~ ^-?[0-9]+$ && "$end" =~ ^-?[0-9]+$ && "$pad" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}[!] Invalid numeric input.${RST}"; return 1
+    fi
     if (( end < start )); then echo "[!] Invalid range"; return 1; fi
     local count=$((end - start + 1))
     echo -e "${YEL}[!] Numeric generation count: $count${RST}"
@@ -159,7 +213,7 @@ gen_numeric_range() {
         [[ "$ans" != "CONFIRM" ]] && { echo "Aborted."; return 1; }
     fi
     check_disk_for_estimate "$count" || return 1
-    local i=0
+    local i=0 n
     for ((n=start;n<=end;n++)); do
         if (( pad > 0 )); then
             printf "%0${pad}d\n" "$n" >> "$TMPFILE"
@@ -174,10 +228,15 @@ gen_numeric_range() {
 }
 
 gen_template() {
-    # chars: # digit, ? lower, @ upper, * alnum
+    # Template symbols:
+    # '#' digit, '?' lower, '@' upper, '*' alnum
     local template="$1"
+    if [[ -z "$template" ]]; then
+        echo "[!] Empty template"; return 1
+    fi
     # build charsets array
     local -a sets=()
+    local ch s
     for ((i=0;i<${#template};i++)); do
         ch="${template:i:1}"
         case "$ch" in
@@ -188,10 +247,11 @@ gen_template() {
             *) sets+=("$ch") ;;
         esac
     done
+
     # estimate total
     local total=1
     for s in "${sets[@]}"; do
-        if [[ ${#s} -gt 1 ]]; then
+        if (( ${#s} > 1 )); then
             total=$(( total * ${#s} ))
         fi
     done
@@ -202,42 +262,55 @@ gen_template() {
         [[ "$ans" != "CONFIRM" ]] && { echo "Aborted."; return 1; }
     fi
     check_disk_for_estimate "$total" || return 1
-    # iterative counters
+
+    # prepare index array
     local len=${#sets[@]}
-    local -a idx; for ((i=0;i<len;i++)); do idx[i]=0; done
+    local -a idx
+    for ((i=0;i<len;i++)); do idx[i]=0; done
+
+    local carry=0 out=""
     while true; do
-        local out=""
+        out=""
         for ((i=0;i<len;i++)); do
             s="${sets[i]}"
-            if [[ ${#s} -eq 1 ]]; then out+="$s"; else out+="${s:idx[i]:1}"; fi
+            if (( ${#s} == 1 )); then
+                out+="$s"
+            else
+                out+="${s:idx[i]:1}"
+            fi
         done
         echo "$out" >> "$TMPFILE"
-        # increment
-        local carry=1
+
+        # increment indexes (like odometer)
+        carry=1
         for ((i=len-1;i>=0;i--)); do
-            if [[ ${#sets[i]} -eq 1 ]]; then
+            s="${sets[i]}"
+            if (( ${#s} == 1 )); then
+                # fixed char -> skip
                 continue
             fi
             idx[i]=$(( idx[i] + carry ))
-            if (( idx[i] >= ${#sets[i]} )); then
+            if (( idx[i] >= ${#s} )); then
                 idx[i]=0
                 carry=1
             else
-                carry=0; break
+                carry=0
+                break
             fi
         done
         (( carry )) && break
     done
+
     echo -e "${GRN}[+] Template generation done${RST}"
 }
 
 combine_two_files() {
-    local f1="$1"; local f2="$2"; sep="${3:-}"
+    local f1="$1"; local f2="$2"; local sep="${3:-}"
     if [[ ! -f "$f1" || ! -f "$f2" ]]; then echo "[!] files not found"; return 1; fi
-    local count=0
-    while IFS= read -r a; do
-        while IFS= read -r b; do
-            echo "${a}${sep}${b}" >> "$TMPFILE"
+    local count=0 a b
+    while IFS= read -r a || [[ -n "$a" ]]; do
+        while IFS= read -r b || [[ -n "$b" ]]; do
+            printf "%s%s%s\n" "$a" "$sep" "$b" >> "$TMPFILE"
             ((count++))
         done < "$f2"
     done < "$f1"
@@ -249,12 +322,12 @@ combine_two_files() {
 menu_profile() {
     echo -e "${BLU}Profile mode — answer simple questions${RST}"
     read -r -p "Full name (leave blank to skip): " name
-    read -r -p "Nickname: " nick
-    read -r -p "Partner name: " partner
-    read -r -p "Pet name: " pet
-    read -r -p "Birth year (YYYY): " byear
-    read -r -p "Important place/city: " city
-    tokens=()
+    read -r -p "Nickname (leave blank to skip): " nick
+    read -r -p "Partner name (leave blank to skip): " partner
+    read -r -p "Pet name (leave blank to skip): " pet
+    read -r -p "Birth year (YYYY, leave blank to skip): " byear
+    read -r -p "Important place/city (leave blank to skip): " city
+    local -a tokens=()
     for v in "$name" "$nick" "$partner" "$pet" "$byear" "$city"; do
         [[ -n "$v" ]] && tokens+=("$v")
     done
@@ -331,5 +404,5 @@ main_menu() {
     done
 }
 
-# --- Entry ---------------------------------------------------------------
+# Entry
 main_menu
