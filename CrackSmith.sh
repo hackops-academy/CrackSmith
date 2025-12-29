@@ -1,408 +1,231 @@
-#!/usr/bin/env bash
-# CrackSmith — CUpp-like friendly wordlist generator
-# Author: Hinata (refined for Lucky)
-# Version: 1.1
-# Works on: Kali / Ubuntu / Termux (requires bash >=4 for some expansions)
-# License: MIT
-#
-# Usage: ./cracksmith_cupp.sh
-# Interactive. Designed to be readable, safe, and powerful.
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+CrackSmith v2.0 — Advanced Wordlist Generator
+Refined for: High Performance & Logic
+License: MIT
+"""
 
-set -o errexit
-set -o nounset
-set -o pipefail
+import sys
+import os
+import itertools
+import time
+import signal
+import datetime
 
-# Colors (if terminal supports)
-RED="\e[1;31m"; GRN="\e[1;32m"; YEL="\e[1;33m"; BLU="\e[1;34m"; RST="\e[0m"
+# --- Configuration & Colors ---
+class Colors:
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    BOLD = '\033[1m'
+    END = '\033[0m'
 
-# Globals
-OUTFILE=""
-TMPFILE=""
-WORKDIR="$(pwd)"
-MAX_WARN=5000000   # warn above this many entries
-PV="$(command -v pv || true)"
-GZIP="$(command -v gzip || true)"
-SCRIPT_NAME="$(basename "$0")"
+VERSION = "2.0 (Python Engine)"
 
-cleanup() {
-    # remove tmp file if exists
-    if [[ -n "${TMPFILE:-}" && -f "$TMPFILE" ]]; then
-        rm -f "$TMPFILE"
-    fi
-}
-trap cleanup EXIT INT TERM
+# --- Ethics Warning ---
+def banner():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print(f"{Colors.GREEN}{Colors.BOLD}")
+    print(r"""
+_________                       __               _________       .__  __  .__     
+\_   ___ \____________    ____ |  | __          /   _____/ _____ |__|/  |_|  |__  
+/    \  \/\_  __ \__  \ _/ ___\|  |/ /  ______  \_____  \ /     \|  \   __\  |  \ 
+\     \____|  | \// __ \\  \___|    <  /_____/  /        \  Y Y  \  ||  | |   Y  \
+ \______  /|__|  (____  /\___  >__|_ \         /_______  /__|_|  /__||__| |___|  /
+        \/            \/     \/     \/                 \/      \/              \/ 
+ 
+      Made by Hackops Academy | _hack_ops_
+ """)
+    print(f"   {Colors.BLUE}v{VERSION} | Advanced Pattern Engine{Colors.END}")
+    print(f"{Colors.YELLOW}")
+    print(" ETHICS WARNING: This tool is for authorized testing only.")
+    print(" Unauthorized access to computer systems is illegal.")
+    print(f"{Colors.END}")
+    print("-" * 60)
 
-ethics() {
-    cat <<EOF
+# --- Core Logic Generators ---
 
-${YEL}ETHICS & LEGAL NOTICE:${RST}
-This tool generates password lists. Use it only for:
- - authorized penetration tests,
- - recovering your own passwords,
- - lab exercises you control.
+def leet_transform(word):
+    """Generates leet speak variations."""
+    subs = {
+        'a': ['4', '@'], 'e': ['3'], 'i': ['1', '!'], 
+        'o': ['0'], 's': ['$', '5'], 't': ['7']
+    }
+    # Simple strategy: Return original, and full-leet version
+    # (Recursive permutation is too heavy for millions of base words)
+    variations = {word}
+    
+    # version 1: simple substitution
+    chars = list(word)
+    for i, c in enumerate(chars):
+        if c.lower() in subs:
+            chars[i] = subs[c.lower()][0]
+    variations.add("".join(chars))
+    
+    return variations
 
-Unauthorized use against systems you do not own is illegal and unethical.
-Always keep written permission when testing others.
+def casing_transform(word):
+    """Returns set of casing variations."""
+    return {
+        word,
+        word.lower(),
+        word.upper(),
+        word.capitalize(),
+        word.swapcase()
+    }
 
-EOF
-}
+def generate_years(start=1980, end=2030):
+    return [str(y) for y in range(start, end + 1)]
 
-banner() {
-    clear
-    printf "${GRN}CrackSmith — CUpp-style friendly wordlist generator v1.1${RST}\n"
-    echo "Simple • Safe • Powerful"
-    ethics
-}
+def get_profile_permutations(data):
+    """
+    The Heavy Lifter.
+    Combines profile data in pairs and triplets.
+    Ex: Name+Date, Pet+Name+Suffix, etc.
+    """
+    base_words = set()
+    
+    # 1. Normalize Inputs
+    raw_inputs = [data[k] for k in data if data[k]]
+    
+    # 2. Expand Base Words (Case + Leet)
+    for w in raw_inputs:
+        cases = casing_transform(w)
+        for c in cases:
+            base_words.update(leet_transform(c))
+            
+    # Add common separators
+    separators = ["", "_", ".", "-", "!"]
+    
+    # Add common suffixes
+    suffixes = ["123", "12", "1", "!", "!!", "01", "2024", "2025"]
+    
+    # 3. Yield logic (Generator)
+    # Single words + suffix
+    for word in base_words:
+        yield word
+        for suf in suffixes:
+            yield f"{word}{suf}"
+            
+    # 4. Combinations (Word + Sep + Word)
+    # We limit to permutations of 2 items to keep file size manageable (< 100GB)
+    # Use itertools to generate (Word A, Word B)
+    for a, b in itertools.permutations(base_words, 2):
+        for sep in separators:
+            yield f"{a}{sep}{b}"
+            # Add suffix to combo
+            yield f"{a}{sep}{b}123"
+            yield f"{a}{sep}{b}!"
 
-ensure_tmp() {
-    if [[ -n "${TMPFILE:-}" && -f "$TMPFILE" ]]; then
-        : # already created
-    else
-        TMPFILE="$(mktemp "${WORKDIR}/cracksmith.XXXXXX")" || { echo "mktemp failed"; exit 1; }
-        {
-            echo "# CrackSmith CUpp-style wordlist"
-            if date --iso-8601=seconds >/dev/null 2>&1; then
-                echo "# Generated: $(date --iso-8601=seconds)"
-            else
-                echo "# Generated: $(date)"
-            fi
-        } > "$TMPFILE"
-    fi
-}
-
-# finalize writes TMPFILE -> OUTFILE (sorted unique), optional gzip
-finalize() {
-    if [[ -z "${OUTFILE:-}" ]]; then
-        read -r -p "No output filename given. Enter output filename: " OUTFILE
-        if [[ -z "$OUTFILE" ]]; then
-            echo -e "${RED}[!] No output file specified. Aborting.${RST}"
-            return 1
-        fi
-    fi
-    if [[ ! -f "$TMPFILE" ]]; then
-        echo -e "${RED}[!] No temporary data to finalize.${RST}"
-        return 1
-    fi
-
-    # sort & uniq safely (use temp file)
-    local sorted_tmp
-    sorted_tmp="$(mktemp "${WORKDIR}/cracksmith.sorted.XXXXXX")"
-    sort -u "$TMPFILE" -o "$sorted_tmp"
-    mv -f "$sorted_tmp" "$OUTFILE"
-    echo -e "${GRN}[✔] Final wordlist saved to: $OUTFILE${RST}"
-
-    # offer compression if gzip available
-    if [[ -n "$GZIP" ]]; then
-        read -r -p "Compress output with gzip? (y/N): " c
-        c="${c:-N}"
-        if [[ "${c,,}" == "y" ]]; then
-            "$GZIP" -f "$OUTFILE"
-            OUTFILE="${OUTFILE}.gz"
-            echo -e "${GRN}[✔] Compressed -> $OUTFILE${RST}"
-        fi
-    fi
-
-    # clean temp file (trap will also cleanup on exit)
-    rm -f "$TMPFILE" || true
-    TMPFILE=""
-}
-
-check_disk_for_estimate() {
-    # estimate bytes = entries * avg_len (approx 16)
-    local entries="$1"
-    if ! [[ "$entries" =~ ^[0-9]+$ ]]; then
-        return 0
-    fi
-    local needed=$(( entries * 16 ))
-    local avail_kb
-    avail_kb=$(df -P . --output=avail 2>/dev/null | tail -n1 || echo 0)
-    # ensure numeric
-    avail_kb="${avail_kb//[^0-9]/}"
-    local avail_bytes=$(( avail_kb * 1024 ))
-    if (( avail_bytes < needed )); then
-        echo -e "${RED}[!] Not enough disk space (need approx $(printf '%d' "$needed") bytes). Aborting.${RST}"
-        return 1
-    fi
-    return 0
-}
-
-progress_echo() {
-    local n="$1"
-    printf "\r[+] Generated %d entries..." "$n" >&2
-}
-
-# --- Generators ----------------------------------------------------------
-
-gen_profile_variants() {
-    local -a toks=("$@")
-    local n=0
-    local t l
-    for t in "${toks[@]}"; do
-        [[ -z "$t" ]] && continue
-        # safe normalize (preserve original then variants)
-        echo "$t" >> "$TMPFILE"; ((n++))
-        # lower / upper / capitalized
-        if command -v awk >/dev/null 2>&1; then
-            echo "$t" | awk '{print tolower($0)}' >> "$TMPFILE"; ((n++))
-            echo "$t" | awk '{print toupper($0)}' >> "$TMPFILE"; ((n++))
-        else
-            echo "${t,,}" >> "$TMPFILE"; ((n++))
-            echo "${t^^}" >> "$TMPFILE"; ((n++))
-        fi
-        echo "${t^}" >> "$TMPFILE"; ((n++))
-        echo "${t}123" >> "$TMPFILE"; ((n++))
-        echo "${t}1234" >> "$TMPFILE"; ((n++))
-        echo "${t}2025" >> "$TMPFILE"; ((n++))
-        echo "${t}!@#" >> "$TMPFILE"; ((n++))
-        echo "${t}007" >> "$TMPFILE"; ((n++))
-        echo "${t}_01" >> "$TMPFILE"; ((n++))
-        # leet
-        l="${t//o/0}"; l="${l//a/4}"; l="${l//e/3}"; l="${l//i/1}"; l="${l//s/5}"
-        echo "$l" >> "$TMPFILE"; ((n++))
-        echo "${l}123" >> "$TMPFILE"; ((n++))
-    done
-
-    # combine tokens pairwise
-    local len="${#toks[@]}"
-    local i j a b
-    for ((i=0;i<len;i++)); do
-        for ((j=0;j<len;j++)); do
-            [[ $i -eq $j ]] && continue
-            a="${toks[i]}"; b="${toks[j]}"
-            [[ -z "$a" || -z "$b" ]] && continue
-            echo "${a}${b}" >> "$TMPFILE"; ((n++))
-            echo "${a}_${b}" >> "$TMPFILE"; ((n++))
-            echo "${a}${b}123" >> "$TMPFILE"; ((n++))
-        done
-    done
-    echo -e "${GRN}[+] Created approx $n profile variants${RST}"
-}
-
-gen_dictionary_transforms() {
-    local dict="$1"
-    if [[ ! -f "$dict" ]]; then
-        echo -e "${RED}[!] Dictionary file not found: $dict${RST}"; return 1
-    fi
-    local count=0
-    local w l
-    while IFS= read -r w || [[ -n "$w" ]]; do
-        [[ -z "$w" ]] && continue
-        echo "$w" >> "$TMPFILE"; ((count++))
-        echo "${w}123" >> "$TMPFILE"; ((count++))
-        echo "${w}2025" >> "$TMPFILE"; ((count++))
-        echo "${w^^}" >> "$TMPFILE"; ((count++))
-        echo "${w^}" >> "$TMPFILE"; ((count++))
-        l="${w//o/0}"; l="${l//a/4}"; l="${l//e/3}"; l="${l//i/1}"; l="${l//s/5}"
-        echo "$l" >> "$TMPFILE"; ((count++))
-    done < "$dict"
-    echo -e "${GRN}[+] Processed $count transformed entries from $dict${RST}"
-}
-
-gen_numeric_range() {
-    local start="$1"; local end="$2"; local pad="$3"
-    # validate numeric
-    if ! [[ "$start" =~ ^-?[0-9]+$ && "$end" =~ ^-?[0-9]+$ && "$pad" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}[!] Invalid numeric input.${RST}"; return 1
-    fi
-    if (( end < start )); then echo "[!] Invalid range"; return 1; fi
-    local count=$((end - start + 1))
-    echo -e "${YEL}[!] Numeric generation count: $count${RST}"
-    if (( count > MAX_WARN )); then
-        echo -e "${RED}[!] This will generate a lot of lines. Type CONFIRM to proceed.${RST}"
-        read -r ans
-        [[ "$ans" != "CONFIRM" ]] && { echo "Aborted."; return 1; }
-    fi
-    check_disk_for_estimate "$count" || return 1
-    local i=0 n
-    for ((n=start;n<=end;n++)); do
-        if (( pad > 0 )); then
-            printf "%0${pad}d\n" "$n" >> "$TMPFILE"
-        else
-            printf "%d\n" "$n" >> "$TMPFILE"
-        fi
-        ((i++))
-        (( i % 50000 == 0 )) && progress_echo "$i"
-    done
-    echo
-    echo -e "${GRN}[+] Numeric generation produced $i entries${RST}"
-}
-
-gen_template() {
-    # Template symbols:
-    # '#' digit, '?' lower, '@' upper, '*' alnum
-    local template="$1"
-    if [[ -z "$template" ]]; then
-        echo "[!] Empty template"; return 1
-    fi
-    # build charsets array
-    local -a sets=()
-    local ch s
-    for ((i=0;i<${#template};i++)); do
-        ch="${template:i:1}"
-        case "$ch" in
-            '#') sets+=("0123456789") ;;
-            '?') sets+=("abcdefghijklmnopqrstuvwxyz") ;;
-            '@') sets+=("ABCDEFGHIJKLMNOPQRSTUVWXYZ") ;;
-            '*') sets+=("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") ;;
-            *) sets+=("$ch") ;;
-        esac
-    done
-
-    # estimate total
-    local total=1
-    for s in "${sets[@]}"; do
-        if (( ${#s} > 1 )); then
-            total=$(( total * ${#s} ))
-        fi
-    done
-    echo -e "${YEL}[!] Template will generate approx $total entries${RST}"
-    if (( total > MAX_WARN )); then
-        echo -e "${RED}[!] Large template expansion. Type CONFIRM to proceed.${RST}"
-        read -r ans
-        [[ "$ans" != "CONFIRM" ]] && { echo "Aborted."; return 1; }
-    fi
-    check_disk_for_estimate "$total" || return 1
-
-    # prepare index array
-    local len=${#sets[@]}
-    local -a idx
-    for ((i=0;i<len;i++)); do idx[i]=0; done
-
-    local carry=0 out=""
-    while true; do
-        out=""
-        for ((i=0;i<len;i++)); do
-            s="${sets[i]}"
-            if (( ${#s} == 1 )); then
-                out+="$s"
-            else
-                out+="${s:idx[i]:1}"
-            fi
-        done
-        echo "$out" >> "$TMPFILE"
-
-        # increment indexes (like odometer)
-        carry=1
-        for ((i=len-1;i>=0;i--)); do
-            s="${sets[i]}"
-            if (( ${#s} == 1 )); then
-                # fixed char -> skip
+def mask_generator(mask):
+    """
+    Hashcat style mask generator.
+    ?d = digit, ?l = lower, ?u = upper, ?s = symbol
+    """
+    chars = {
+        '?d': '0123456789',
+        '?l': 'abcdefghijklmnopqrstuvwxyz',
+        '?u': 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+        '?s': '!@#$%^&*()-_=+'
+    }
+    
+    # Parse mask
+    # This is a basic parser. For advanced parsing, use regex logic.
+    # We will assume the user enters standard python format for now or simple placeholders
+    # Let's map strict positions.
+    
+    token_list = []
+    i = 0
+    while i < len(mask):
+        if mask[i] == '?' and i+1 < len(mask):
+            key = mask[i:i+2]
+            if key in chars:
+                token_list.append(chars[key])
+                i += 2
                 continue
-            fi
-            idx[i]=$(( idx[i] + carry ))
-            if (( idx[i] >= ${#s} )); then
-                idx[i]=0
-                carry=1
-            else
-                carry=0
-                break
-            fi
-        done
-        (( carry )) && break
-    done
+        token_list.append(mask[i]) # Literal character
+        i += 1
+        
+    # itertools.product generates the cartesian product
+    for combo in itertools.product(*token_list):
+        yield "".join(combo)
 
-    echo -e "${GRN}[+] Template generation done${RST}"
-}
+# --- Menus & Input ---
 
-combine_two_files() {
-    local f1="$1"; local f2="$2"; local sep="${3:-}"
-    if [[ ! -f "$f1" || ! -f "$f2" ]]; then echo "[!] files not found"; return 1; fi
-    local count=0 a b
-    while IFS= read -r a || [[ -n "$a" ]]; do
-        while IFS= read -r b || [[ -n "$b" ]]; do
-            printf "%s%s%s\n" "$a" "$sep" "$b" >> "$TMPFILE"
-            ((count++))
-        done < "$f2"
-    done < "$f1"
-    echo -e "${GRN}[+] Combined into $count entries${RST}"
-}
+def interactive_profile():
+    print(f"{Colors.BLUE}[*] PROFILE MODE: Leave empty to skip.{Colors.END}")
+    data = {}
+    data['first'] = input("First Name: ").strip()
+    data['last']  = input("Last Name:  ").strip()
+    data['nick']  = input("Nickname:   ").strip()
+    data['bday']  = input("Birth Year: ").strip()
+    data['partner'] = input("Partner:    ").strip()
+    data['pet']   = input("Pet Name:   ").strip()
+    data['company'] = input("Company/City: ").strip()
+    
+    return data
 
-# --- Menu ---------------------------------------------------------------
+def save_generator_to_file(generator, filename):
+    print(f"\n{Colors.YELLOW}[*] Generating... Please wait.{Colors.END}")
+    count = 0
+    start_time = time.time()
+    
+    try:
+        with open(filename, 'w', encoding='utf-8', errors='ignore') as f:
+            for line in generator:
+                f.write(line + '\n')
+                count += 1
+                if count % 50000 == 0:
+                    sys.stdout.write(f"\r[+] Lines generated: {count:,}")
+                    sys.stdout.flush()
+    except KeyboardInterrupt:
+        print(f"\n{Colors.RED}[!] Interrupted by user.{Colors.END}")
+    
+    elapsed = time.time() - start_time
+    print(f"\n{Colors.GREEN}[✔] Done! Generated {count:,} passwords in {elapsed:.2f}s.{Colors.END}")
+    print(f"{Colors.GREEN}[✔] Saved to: {os.path.abspath(filename)}{Colors.END}")
 
-menu_profile() {
-    echo -e "${BLU}Profile mode — answer simple questions${RST}"
-    read -r -p "Full name (leave blank to skip): " name
-    read -r -p "Nickname (leave blank to skip): " nick
-    read -r -p "Partner name (leave blank to skip): " partner
-    read -r -p "Pet name (leave blank to skip): " pet
-    read -r -p "Birth year (YYYY, leave blank to skip): " byear
-    read -r -p "Important place/city (leave blank to skip): " city
-    local -a tokens=()
-    for v in "$name" "$nick" "$partner" "$pet" "$byear" "$city"; do
-        [[ -n "$v" ]] && tokens+=("$v")
-    done
-    if [[ ${#tokens[@]} -eq 0 ]]; then echo "[!] No tokens provided."; return; fi
-    ensure_tmp
-    gen_profile_variants "${tokens[@]}"
-    finalize
-}
+# --- Main Execution ---
 
-menu_dict_transforms() {
-    read -r -p "Path to dictionary file (one word per line): " dict
-    if [[ ! -f "$dict" ]]; then echo "[!] Not found"; return; fi
-    ensure_tmp
-    gen_dictionary_transforms "$dict"
-    finalize
-}
+def main():
+    signal.signal(signal.SIGINT, lambda x,y: sys.exit(0)) # Clean exit on Ctrl+C
+    banner()
+    
+    print("1. Profile Generator (Smart Combinations)")
+    print("2. Mask Attack (e.g. ?l?l?l?d?d)")
+    print("3. Numeric Range")
+    print("4. Exit")
+    
+    choice = input(f"\n{Colors.BOLD}Select > {Colors.END}")
+    
+    filename = input("Enter output filename (default: wordlist.txt): ").strip()
+    if not filename: filename = "wordlist.txt"
 
-menu_numeric() {
-    read -r -p "Start (e.g., 0): " s
-    read -r -p "End (e.g., 9999): " e
-    read -r -p "Zero-pad width (0=no pad, e.g., 4): " pad
-    ensure_tmp
-    gen_numeric_range "$s" "$e" "$pad"
-    finalize
-}
+    if choice == '1':
+        data = interactive_profile()
+        gen = get_profile_permutations(data)
+        save_generator_to_file(gen, filename)
+        
+    elif choice == '2':
+        print(f"\n{Colors.BLUE}Mask Key: ?l (lower), ?u (upper), ?d (digit), ?s (symbol){Colors.END}")
+        mask = input("Enter mask (e.g., pass?d?d?d): ")
+        gen = mask_generator(mask)
+        save_generator_to_file(gen, filename)
 
-menu_template() {
-    echo "Template symbols: # digit, ? lower, @ upper, * alnum"
-    read -r -p "Template: " tpl
-    ensure_tmp
-    gen_template "$tpl"
-    finalize
-}
+    elif choice == '3':
+        start = int(input("Start number: "))
+        end = int(input("End number: "))
+        pad = int(input("Padding (e.g., 4 for 0001): "))
+        # Generator expression for efficiency
+        gen = (f"{n:0{pad}d}" for n in range(start, end + 1))
+        save_generator_to_file(gen, filename)
+        
+    else:
+        print("Exiting.")
+        sys.exit()
 
-menu_combine() {
-    read -r -p "File A (path): " f1
-    read -r -p "File B (path): " f2
-    read -r -p "Separator (optional): " sep
-    ensure_tmp
-    combine_two_files "$f1" "$f2" "$sep"
-    finalize
-}
-
-menu_sort_unique() {
-    read -r -p "Enter file to sort & dedupe: " f
-    [[ ! -f "$f" ]] && { echo "[!] not found"; return; }
-    sort -u "$f" -o "${f}.sorted" && mv -f "${f}.sorted" "$f"
-    echo -e "${GRN}[✔] Sorted & deduped: $f${RST}"
-}
-
-main_menu() {
-    banner
-    while true; do
-        echo
-        echo -e "${YEL}Choose an option:${RST}"
-        echo "1) Profile mode (like cupp) — quick and friendly"
-        echo "2) Dictionary transforms (leet, caps, suffixes)"
-        echo "3) Numeric generator"
-        echo "4) Template generator (# ? @ *)"
-        echo "5) Combine two existing wordlists"
-        echo "6) Sort & dedupe an existing file"
-        echo "0) Exit"
-        read -r -p "Select: " opt
-        case "$opt" in
-            1) read -r -p "Output filename (e.g., mylist.txt): " OUTFILE; menu_profile ;;
-            2) read -r -p "Output filename (e.g., dict_out.txt): " OUTFILE; menu_dict_transforms ;;
-            3) read -r -p "Output filename (e.g., nums.txt): " OUTFILE; menu_numeric ;;
-            4) read -r -p "Output filename (e.g., tpl.txt): " OUTFILE; menu_template ;;
-            5) read -r -p "Output filename (e.g., combo.txt): " OUTFILE; menu_combine ;;
-            6) menu_sort_unique ;;
-            0) echo "Good luck. Stay ethical."; exit 0 ;;
-            *) echo "[!] Invalid option." ;;
-        esac
-    done
-}
-
-# Entry
-main_menu
+if __name__ == "__main__":
+    main()
+    
